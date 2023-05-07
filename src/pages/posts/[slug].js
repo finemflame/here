@@ -1,5 +1,5 @@
-import Head from 'next/head';
 import { getPostBySlug } from 'lib/posts';
+import Head from 'next/head';
 
 export default function PostRedirect({ post }) {
   return (
@@ -24,7 +24,7 @@ export default function PostRedirect({ post }) {
   );
 }
 
-export async function getServerSideProps({ params, res }) {
+export async function getServerSideProps({ params }) {
   const { post } = await getPostBySlug(params.slug);
 
   if (!post) {
@@ -33,11 +33,11 @@ export async function getServerSideProps({ params, res }) {
     };
   }
 
-  res.setHeader('Location', `https://dailytrendings.info/${post.slug}`);
-  res.statusCode = 301;
-  res.end();
-
   return {
+    redirect: {
+      destination: `https://dailytrendings.info/${post.slug}`,
+      permanent: true,
+    },
     props: {},
   };
 }

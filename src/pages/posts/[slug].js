@@ -1,143 +1,37 @@
-import Link from 'next/link';
-import { Helmet } from 'react-helmet';
+import Head from 'next/head';
+import { useEffect } from 'react';
+import { getPostBySlug } from 'lib/posts';
 
-import { getPostBySlug, getRecentPosts, getRelatedPosts, postPathBySlug } from 'lib/posts';
-import { categoryPathBySlug } from 'lib/categories';
-import { formatDate } from 'lib/datetime';
-import { ArticleJsonLd } from 'lib/json-ld';
-import { helmetSettingsFromMetadata } from 'lib/site';
-import useSite from 'hooks/use-site';
-import usePageMetadata from 'hooks/use-page-metadata';
-
-import Layout from 'components/Layout';
-import Header from 'components/Header';
-import Section from 'components/Section';
-import Container from 'components/Container';
-import Content from 'components/Content';
-import Metadata from 'components/Metadata';
-import FeaturedImage from 'components/FeaturedImage';
-
-import styles from 'styles/pages/Post.module.scss';
-
-export default function Post({ post, socialImage, related }) {
-  const {
-    title,
-    metaTitle,
-    description,
-    content,
-    date,
-    author,
-    categories,
-    modified,
-    featuredImage,
-    isSticky = false,
-  } = post;
-
-  const { metadata: siteMetadata = {}, homepage } = useSite();
-
-  if (!post.og) {
-    post.og = {};
-  }
-
-  post.og.imageUrl = `${homepage}${socialImage}`;
-  post.og.imageSecureUrl = post.og.imageUrl;
-  post.og.imageWidth = 2000;
-  post.og.imageHeight = 1000;
-
-  const { metadata } = usePageMetadata({
-    metadata: {
-      ...post,
-      title: metaTitle,
-      description: description || post.og?.description || `Read more about ${title}`,
-    },
-  });
-
-  if (process.env.WORDPRESS_PLUGIN_SEO !== true) {
-    metadata.title = `${title} - ${siteMetadata.title}`;
-    metadata.og.title = metadata.title;
-    metadata.twitter.title = metadata.title;
-  }
-
-  const metadataOptions = {
-    compactCategories: false,
-  };
-
-  const { posts: relatedPostsList, title: relatedPostsTitle } = related || {};
-
-  const helmetSettings = helmetSettingsFromMetadata(metadata);
+export default function PostRedirect({ post }) {
+  useEffect(() => {
+    // Redirect to the WordPress domain URL with a 301 (permanent) status code
+    window.location.replace(`https://dailytrendings.info/${post.slug}`, { status: 301 });
+  }, [post]);
 
   return (
-    <Layout>
-      <Helmet {...helmetSettings} />
-
-      <ArticleJsonLd post={post} siteTitle={siteMetadata.title} />
-
-      <Header>
-        {featuredImage && (
-          <FeaturedImage
-            {...featuredImage}
-            src={featuredImage.sourceUrl}
-            dangerouslySetInnerHTML={featuredImage.caption}
-          />
-        )}
-        <h1
-          className={styles.title}
-          dangerouslySetInnerHTML={{
-            __html: title,
-          }}
-        />
-        <Metadata
-          className={styles.postMetadata}
-          date={date}
-          author={author}
-          categories={categories}
-          options={metadataOptions}
-          isSticky={isSticky}
-        />
-      </Header>
-
-      <Content>
-        <Section>
-          <Container>
-            <div
-              className={styles.content}
-              dangerouslySetInnerHTML={{
-                __html: content,
-              }}
-            />
-          </Container>
-        </Section>
-      </Content>
-
-      <Section className={styles.postFooter}>
-        <Container>
-          <p className={styles.postModified}>Last updated on {formatDate(modified)}.</p>
-          {Array.isArray(relatedPostsList) && relatedPostsList.length > 0 && (
-            <div className={styles.relatedPosts}>
-              {relatedPostsTitle.name ? (
-                <span>
-                  More from <Link href={relatedPostsTitle.link}>{relatedPostsTitle.name}</Link>
-                </span>
-              ) : (
-                <span>More Posts</span>
-              )}
-              <ul>
-                {relatedPostsList.map((post) => (
-                  <li key={post.title}>
-                    <Link href={postPathBySlug(post.slug)}>{post.title}</Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </Container>
-      </Section>
-    </Layout>
+    <Head>
+      <meta name="robots" content="noindex, nofollow" />
+      <meta property="og:type" content="article" />
+      <meta property="og:title" content={post.metaTitle || post.title} />
+      <meta property="og:description" content={post.og?.description || post.description} />
+      <meta property="og:image" content={post.og?.imageUrl} />
+      <meta property="og:image:secure_url" content={post.og?.imageSecureUrl} />
+      <meta property="og:image:width" content={post.og?.imageWidth} />
+      <meta property="og:image:height" content={post.og?.imageHeight} />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={post.metaTitle || post.title} />
+      <meta name="twitter:description" content={post.og?.description || post.description} />
+      <meta name="twitter:image" content={post.og?.imageUrl} />
+      <meta name="twitter:image:width" content={post.og?.imageWidth} />
+      <meta name="twitter:image:height" content={post.og?.imageHeight} />
+      <meta name="article:published_time" content={post.date} />
+      <meta name="article:modified_time" content={post.modified} />
+    </Head>
   );
 }
 
-export async function getStaticProps({ params = {} } = {}) {
-  const { post } = await getPostBySlug(params?.slug);
+export async function getServerSideProps({ params }) {
+  const { post } = await getPostBySlug(params.slug);
 
   if (!post) {
     return {
@@ -146,53 +40,9 @@ export async function getStaticProps({ params = {} } = {}) {
     };
   }
 
-  const { categories, databaseId: postId } = post;
-
-  const props = {
-    post,
-    socialImage: `${process.env.OG_IMAGE_DIRECTORY}/${params?.slug}.png`,
-  };
-
-  const { category: relatedCategory, posts: relatedPosts } = (await getRelatedPosts(categories, postId)) || {};
-  const hasRelated = relatedCategory && Array.isArray(relatedPosts) && relatedPosts.length;
-
-  if (hasRelated) {
-    props.related = {
-      posts: relatedPosts,
-      title: {
-        name: relatedCategory.name || null,
-        link: categoryPathBySlug(relatedCategory.slug),
-      },
-    };
-  }
-
   return {
-    props,
-  };
-}
-
-export async function getStaticPaths() {
-  // Only render the most recent posts to avoid spending unecessary time
-  // querying every single post from WordPress
-
-  // Tip: this can be customized to use data or analytitcs to determine the
-  // most popular posts and render those instead
-
-  const { posts } = await getRecentPosts({
-    count: process.env.POSTS_PRERENDER_COUNT, // Update this value in next.config.js!
-    queryIncludes: 'index',
-  });
-
-  const paths = posts
-    .filter(({ slug }) => typeof slug === 'string')
-    .map(({ slug }) => ({
-      params: {
-        slug,
-      },
-    }));
-
-  return {
-    paths,
-    fallback: 'blocking',
+    props: {
+      post,
+    },
   };
 }
